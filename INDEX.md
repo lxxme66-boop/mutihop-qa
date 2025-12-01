@@ -2,6 +2,12 @@
 
 ## 🎯 快速导航
 
+### **我想全面了解项目**
+→ 阅读 **`README_COMPLETE.md`**（10分钟）⭐⭐⭐
+
+### **我想了解技术总结（流程+创新+难点）**
+→ 阅读 **`TECHNICAL_SUMMARY.md`**（30分钟）⭐⭐⭐
+
 ### **我是新手，想快速上手**
 → 阅读 **`QUICK_START_OPTIMIZED.md`**（10分钟）
 
@@ -25,6 +31,8 @@
 
 | 文件 | 说明 | 适合人群 | 阅读时间 |
 |------|------|----------|----------|
+| **`README_COMPLETE.md`** | ⭐⭐⭐ **完整项目交付总结** | 所有人 | 10分钟 |
+| **`TECHNICAL_SUMMARY.md`** | ⭐⭐⭐ **技术总结（流程+创新+难点）** | 开发者 | 30分钟 |
 | **`QUICK_START_OPTIMIZED.md`** | ⭐ **快速启动指南** | 所有人 | 10分钟 |
 | `README_OPTIMIZATION.md` | 优化总结 | 所有人 | 5分钟 |
 | `INDEX.md` | 本文档 - 文档索引 | 所有人 | 2分钟 |
@@ -34,8 +42,10 @@
 | 文件 | 说明 | 适合人群 | 阅读时间 |
 |------|------|----------|----------|
 | **`COMPLETE_WORKFLOW_OPTIMIZED.md`** | ⭐ **完整流程详解** | 开发者 | 30分钟 |
+| `ENTITY_EXTRACTION_COMPARISON.md` | ⭐ **实体提取对比** | 技术人员 | 15分钟 |
 | `BRIDGING_ENHANCEMENT_ANALYSIS.md` | 桥接优化详细分析 | 技术人员 | 20分钟 |
 | `QA_SYNTHESIS_FLOW.md` | QA合成流程图解 | 产品经理 | 15分钟 |
+| `README_FINAL.md` | 最新更新总结 | 所有人 | 10分钟 |
 
 ### **💻 核心代码**
 
@@ -63,46 +73,46 @@
 ### **路径1：快速上手（新手）**
 
 ```
-1. README_OPTIMIZATION.md（5分钟）
-   ↓ 了解优化效果
+1. README_COMPLETE.md（10分钟）⭐⭐⭐
+   ↓ 全面了解项目
    
 2. QUICK_START_OPTIMIZED.md（10分钟）
    ↓ 学习如何使用
    
-3. 运行 expert_qa_optimized.py
+3. 运行 expert_qa_optimized_new.py
    ↓ 实际操作
-   
-4. COMPLETE_WORKFLOW_OPTIMIZED.md（30分钟）
-   ↓ 深入理解
 ```
 
 ### **路径2：技术研究（开发者）**
 
 ```
-1. README_OPTIMIZATION.md（5分钟）
-   ↓ 优化总览
+1. README_COMPLETE.md（10分钟）⭐⭐⭐
+   ↓ 项目总览
+   
+2. TECHNICAL_SUMMARY.md（30分钟）⭐⭐⭐
+   ↓ 详细的流程+创新点+难点
+   
+3. ENTITY_EXTRACTION_COMPARISON.md（15分钟）
+   ↓ 实体提取对比
+   
+4. expert_qa_optimized_new.py（代码阅读）
+   ↓ 实现细节
+```
+
+### **路径3：深度研究（专家）**
+
+```
+1. TECHNICAL_SUMMARY.md（30分钟）⭐⭐⭐
+   ↓ 完整技术总结
    
 2. BRIDGING_ENHANCEMENT_ANALYSIS.md（20分钟）
-   ↓ 技术分析
-   
-3. expert_qa_optimized.py（代码阅读）
-   ↓ 实现细节
-   
-4. COMPLETE_WORKFLOW_OPTIMIZED.md（30分钟）
-   ↓ 完整流程
-```
-
-### **路径3：产品理解（产品经理）**
-
-```
-1. README_OPTIMIZATION.md（5分钟）
-   ↓ 了解优化价值
-   
-2. QA_SYNTHESIS_FLOW.md（15分钟）
-   ↓ 流程可视化
+   ↓ 桥接优化分析
    
 3. COMPLETE_WORKFLOW_OPTIMIZED.md（30分钟）
-   ↓ 详细流程
+   ↓ 完整流程详解
+   
+4. 代码 + 其他文档
+   ↓ 深入研究
 ```
 
 ---
