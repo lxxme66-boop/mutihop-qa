@@ -8,6 +8,7 @@
 3. ✅ 4重增强质量检查（来自原系统）
 4. ✅ 完整支持chunk字段
 5. ✅ 所有prompt都基于chunk生成
+6. ✅ 只有合格样本（medium+）才计入目标数量 ⭐ 新增
 """
 
 import json
@@ -580,10 +581,14 @@ class SemiconductorKB:
     
     def __init__(self, qa_data: List[Dict], llm: LLMClient):
         # 验证chunk字段
+        missing_chunk_count = 0
         for qa in qa_data:
             if 'chunk' not in qa:
-                print(f"[WARNING] QA-{qa.get('id', 'unknown')} 缺少chunk字段，将添加空chunk")
+                missing_chunk_count += 1
                 qa['chunk'] = ""
+        
+        if missing_chunk_count > 0:
+            print(f"[WARNING] {missing_chunk_count} 条QA缺少chunk字段，已自动添加空chunk")
         
         self.qa_data = {qa['id']: qa for qa in qa_data}
         self.qa_ids = list(self.qa_data.keys())
@@ -621,7 +626,8 @@ class SemiconductorKB:
         # 使用常见技术词汇作为关键词
         keywords = []
         tech_terms = ['半导体', '晶体管', '芯片', '材料', '器件', '工艺', 
-                     '性能', '电路', '金刚石', '硅', 'GaN', 'SiC', '量子']
+                     '性能', '电路', '金刚石', '硅', 'GaN', 'SiC', '量子',
+                     '温度', '电流', '电压', '频率', '能带', '载流子']
         
         for term in tech_terms:
             if term in text:
@@ -1201,38 +1207,51 @@ class ExpertQAAgent:
 
 
 # ========================================================================
-# 第5部分：批量生成 + 质量报告
+# 第5部分：批量生成 + 质量报告（优化版：只计数合格样本）⭐⭐⭐
 # ========================================================================
 
 async def generate_batch(agent: ExpertQAAgent, num_samples: int, 
                         num_hops_range: Tuple[int, int] = (2, 3),
                         quality_filter: str = 'medium+',
-                        output_format: str = 'jsonl') -> List[Dict]:
+                        output_format: str = 'jsonl',
+                        max_attempts_multiplier: int = 5) -> List[Dict]:
     """
-    批量生成多跳QA
+    批量生成多跳QA（优化版：只有合格样本计入目标数量）⭐⭐⭐
     
     Args:
         agent: ExpertQAAgent实例
-        num_samples: 生成数量
+        num_samples: 目标生成数量（只计数合格样本）
         num_hops_range: 跳数范围 (min, max)
         quality_filter: 质量过滤 ('high', 'medium+', 'all')
         output_format: 输出格式 ('jsonl', 'json', 'both')
+        max_attempts_multiplier: 最大尝试次数倍数（防止死循环）
     
     Returns:
-        生成的QA列表
+        生成的QA列表（所有样本都符合quality_filter）
     """
     print(f"\n{'#'*60}")
     print(f"# 批量生成任务")
-    print(f"#   目标数量: {num_samples}")
+    print(f"#   目标数量: {num_samples} 个合格样本")
     print(f"#   跳数范围: {num_hops_range}")
     print(f"#   质量过滤: {quality_filter}")
+    print(f"#   计数规则: 只有{quality_filter}样本计入目标数量 ⭐")
     print(f"{'#'*60}\n")
     
     results = []
+    success_count = 0  # 成功生成的合格样本数
+    attempt_count = 0  # 总尝试次数
+    max_attempts = num_samples * max_attempts_multiplier  # 最大尝试次数
     
-    for i in range(num_samples):
+    # 统计信息
+    quality_stats = {'high': 0, 'medium': 0, 'low': 0, 'unknown': 0}
+    filtered_count = 0  # 被过滤掉的数量
+    
+    while success_count < num_samples and attempt_count < max_attempts:
+        attempt_count += 1
+        
         print(f"\n{'='*60}")
-        print(f"  进度: {i+1}/{num_samples}")
+        print(f"  尝试: {attempt_count} | 成功: {success_count}/{num_samples} | "
+              f"过滤: {filtered_count}")
         print(f"{'='*60}")
         
         # 随机跳数
@@ -1241,34 +1260,73 @@ async def generate_batch(agent: ExpertQAAgent, num_samples: int,
         try:
             qa = await agent.generate_one(num_hops=num_hops)
             
-            # 质量过滤
+            # 质量检查
             quality = qa.get('overall_quality', 'unknown')
             passed_final = qa.get('passed_final_validation', False)
             passed_enhanced = qa.get('passed_enhanced_checks', False)
             
+            # 统计质量分布
+            quality_stats[quality] = quality_stats.get(quality, 0) + 1
+            
+            # 质量过滤判断
+            is_qualified = False
+            filter_reason = ""
+            
             if quality_filter == 'high':
+                # high模式：必须quality=high + 通过所有检查
                 if quality == 'high' and passed_final and passed_enhanced:
-                    results.append(qa)
+                    is_qualified = True
                 else:
-                    print(f"[过滤] 质量不符合要求（需要high + 通过所有检查）")
+                    filter_reason = f"不满足high要求（quality={quality}, final={passed_final}, enhanced={passed_enhanced}）"
+            
             elif quality_filter == 'medium+':
+                # medium+模式：quality≥medium + 通过最终验证
                 if quality in ['high', 'medium'] and passed_final:
-                    results.append(qa)
+                    is_qualified = True
                 else:
-                    print(f"[过滤] 质量不符合要求（需要medium+且通过最终验证）")
+                    filter_reason = f"不满足medium+要求（quality={quality}, final={passed_final}）"
+            
             else:  # 'all'
+                # all模式：接受所有样本
+                is_qualified = True
+            
+            # 处理结果
+            if is_qualified:
                 results.append(qa)
+                success_count += 1
+                print(f"\n✅ [合格] 样本 #{success_count} 已添加")
+                print(f"   质量: {quality} | 最终验证: {passed_final} | 增强检查: {passed_enhanced}")
+            else:
+                filtered_count += 1
+                print(f"\n❌ [过滤] {filter_reason}")
+                print(f"   继续生成以达到目标数量...")
         
         except Exception as e:
-            print(f"[错误] 生成失败: {e}")
+            print(f"\n⚠️ [错误] 生成失败: {e}")
             import traceback
             traceback.print_exc()
             continue
     
+    # 生成完成总结
     print(f"\n{'#'*60}")
     print(f"# 批量生成完成")
-    print(f"#   成功生成: {len(results)}/{num_samples}")
-    print(f"#   成功率: {len(results)/num_samples*100:.1f}%")
+    print(f"{'#'*60}")
+    
+    if success_count >= num_samples:
+        print(f"✅ 成功: 已生成 {success_count} 个合格样本（目标: {num_samples}）")
+    else:
+        print(f"⚠️ 未完成: 仅生成 {success_count}/{num_samples} 个合格样本")
+        print(f"   已达最大尝试次数: {max_attempts}")
+        print(f"   建议: 降低quality_filter级别或增加max_attempts_multiplier")
+    
+    print(f"\n📊 统计信息:")
+    print(f"   总尝试次数: {attempt_count}")
+    print(f"   成功样本数: {success_count}")
+    print(f"   被过滤数量: {filtered_count}")
+    print(f"   成功率: {success_count/attempt_count*100:.1f}%")
+    print(f"\n   质量分布:")
+    for q, count in quality_stats.items():
+        print(f"     {q}: {count} ({count/attempt_count*100:.1f}%)")
     print(f"{'#'*60}\n")
     
     return results
@@ -1331,9 +1389,9 @@ async def main_async(args):
     print(f"      加载完成: {len(qa_data)} 条")
     
     # 验证chunk字段
-    missing_chunk = sum(1 for qa in qa_data if 'chunk' not in qa)
+    missing_chunk = sum(1 for qa in qa_data if 'chunk' not in qa or not qa['chunk'])
     if missing_chunk > 0:
-        print(f"      [警告] {missing_chunk} 条QA缺少chunk字段")
+        print(f"      [警告] {missing_chunk} 条QA缺少chunk字段或chunk为空")
     
     # 初始化LLM客户端
     print(f"\n[2/5] 初始化LLM客户端")
@@ -1349,12 +1407,14 @@ async def main_async(args):
     
     # 批量生成
     print(f"\n[5/5] 开始批量生成")
+    print(f"      ⭐ 注意: 只有{args.quality_filter}样本才计入目标数量 {args.num_samples}")
     results = await generate_batch(
         agent, 
         num_samples=args.num_samples,
         num_hops_range=(args.min_hops, args.max_hops),
         quality_filter=args.quality_filter,
-        output_format=args.output_format
+        output_format=args.output_format,
+        max_attempts_multiplier=args.max_attempts_multiplier
     )
     
     # 保存结果
@@ -1414,7 +1474,7 @@ def main():
     
     # 生成配置
     parser.add_argument('--num_samples', type=int, default=10,
-                       help='生成数量')
+                       help='目标生成数量（只计数合格样本）⭐')
     parser.add_argument('--min_hops', type=int, default=2,
                        help='最小跳数')
     parser.add_argument('--max_hops', type=int, default=3,
@@ -1423,7 +1483,9 @@ def main():
                        help='最大优化轮数')
     parser.add_argument('--quality_filter', type=str, default='medium+',
                        choices=['high', 'medium+', 'all'],
-                       help='质量过滤级别')
+                       help='质量过滤级别（只有符合的才计入num_samples）')
+    parser.add_argument('--max_attempts_multiplier', type=int, default=5,
+                       help='最大尝试次数倍数（max_attempts = num_samples * multiplier）')
     
     args = parser.parse_args()
     
