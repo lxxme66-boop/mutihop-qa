@@ -23,7 +23,7 @@
 
 | 文件 | 说明 | 用途 |
 |------|------|------|
-| `expert_qa_optimized.py` | **优化后的主程序** ⭐ | 集成所有功能的完整系统 |
+| `expert_qa_optimized_new.py` | **优化后的主程序** ⭐ | 集成所有功能的完整系统 |
 | `expert_qa_integrated.py` | 优化前的版本 | 对比参考 |
 | `llm_client.py` | LLM客户端 | 兼容vLLM/SGLang |
 
@@ -500,7 +500,7 @@ cat example_input.jsonl
 ### **3. 运行优化版系统**
 
 ```bash
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file example_input.jsonl \
   --output_file output_multihop.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \
@@ -529,7 +529,7 @@ python expert_qa_optimized.py \
 
 ```bash
 # 推荐：首次运行启用实体提取（会增加7小时初始化时间）
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file /path/to/single_hop_qa.jsonl \
   --output_file /path/to/multihop_output.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \
@@ -546,7 +546,7 @@ python expert_qa_optimized.py \
 # 如果已经运行过一次并保存了entity_database，可以跳过
 # （需要修改代码支持加载缓存的entity_database）
 
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file /path/to/single_hop_qa.jsonl \
   --output_file /path/to/multihop_output2.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \
@@ -560,7 +560,7 @@ python expert_qa_optimized.py \
 
 ```bash
 # 只保留quality=high且通过所有检查的样本
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file /path/to/single_hop_qa.jsonl \
   --output_file /path/to/multihop_high_quality.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \

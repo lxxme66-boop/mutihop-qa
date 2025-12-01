@@ -6,7 +6,7 @@
 
 | 文件 | 说明 | 何时使用 |
 |------|------|----------|
-| `expert_qa_optimized.py` | **✅ 优化版（推荐）** | 批量生成、追求高质量 |
+| `expert_qa_optimized_new.py` | **✅ 优化版（推荐）** | 批量生成、追求高质量 |
 | `expert_qa_integrated.py` | 原版（对比参考） | 快速测试、不需要实体提取 |
 
 ### **主要差异**
@@ -64,7 +64,7 @@ python -m sglang.launch_server \
 
 ```bash
 # 优化版（推荐）
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file input.jsonl \
   --output_file output.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \

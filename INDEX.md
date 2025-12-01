@@ -41,7 +41,7 @@
 
 | 文件 | 说明 | 何时使用 |
 |------|------|----------|
-| **`expert_qa_optimized.py`** | ✅ **优化版主程序** | 批量生成、高质量需求 |
+| **`expert_qa_optimized_new.py`** | ✅ **优化版主程序** | 批量生成、高质量需求 |
 | `expert_qa_integrated.py` | 原版（对比参考） | 快速测试、无需实体提取 |
 | `llm_client.py` | LLM客户端 | 两个版本共用 |
 
@@ -150,7 +150,7 @@
 ### **优化版（推荐）**
 
 ```bash
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file input.jsonl \
   --output_file output.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \

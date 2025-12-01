@@ -56,7 +56,7 @@
 
 | 文件 | 说明 | 推荐使用 |
 |------|------|----------|
-| **`expert_qa_optimized.py`** | ✅ **优化版主程序** | 批量生成、高质量需求 |
+| **`expert_qa_optimized_new.py`** | ✅ **优化版主程序** | 批量生成、高质量需求 |
 | `expert_qa_integrated.py` | 原版（对比参考） | 快速测试、无需实体提取 |
 | `llm_client.py` | LLM客户端（兼容vLLM/SGLang） | 两个版本共用 |
 
@@ -101,7 +101,7 @@ vllm serve Qwen/Qwen2.5-72B-Instruct \
 ### **Step 3: 运行优化版**
 
 ```bash
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file input.jsonl \
   --output_file output.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \
@@ -287,7 +287,7 @@ async def find_bridgeable_qas_enhanced(base_qa):
 
 ```bash
 # 建议：使用小数据集测试（100条QA）
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file data/test_100.jsonl \
   --output_file output/test.jsonl \
   --num_samples 5 \
@@ -297,7 +297,7 @@ python expert_qa_optimized.py \
 cat output/test_report.json
 
 # 满意后，全量运行（5000条QA）
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file data/full_5000.jsonl \
   --output_file output/multihop.jsonl \
   --num_samples 100 \
@@ -308,7 +308,7 @@ python expert_qa_optimized.py \
 
 ```bash
 # 跳过实体提取（已运行过一次）
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file data/full_5000.jsonl \
   --output_file output/multihop_2.jsonl \
   --num_samples 100 \
@@ -320,7 +320,7 @@ python expert_qa_optimized.py \
 ### **高质量模式**
 
 ```bash
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file data/full_5000.jsonl \
   --output_file output/multihop_high.jsonl \
   --num_samples 50 \

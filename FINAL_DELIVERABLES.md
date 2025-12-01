@@ -6,7 +6,7 @@
 
 | 文件 | 行数 | 说明 | 状态 |
 |------|------|------|------|
-| **`expert_qa_optimized.py`** | ~1600 | ⭐ 优化版主程序（集成所有功能） | ✅ 完成 |
+| **`expert_qa_optimized_new.py`** | ~1600 | ⭐ 优化版主程序（集成所有功能） | ✅ 完成 |
 
 **核心优化点**：
 - ✅ 基于LLM的实体提取（`extract_entities_from_chunk`）
@@ -313,7 +313,7 @@ while success_count < num_samples:
 
 ```bash
 # 优化版（推荐）
-python expert_qa_optimized.py \
+python expert_qa_optimized_new.py \
   --input_file input.jsonl \
   --output_file output.jsonl \
   --llm_url http://localhost:8000/v1/chat/completions \
@@ -344,7 +344,7 @@ python expert_qa_optimized.py \
 
 ### **代码文件（1个）**
 
-- [x] `expert_qa_optimized.py`（~1600行，完整优化版）
+- [x] `expert_qa_optimized_new.py`（~1600行，完整优化版）
 
 ### **文档文件（12个）**
 
