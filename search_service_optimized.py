@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-搜索服务 - 最终优化版
+搜索服务 - 稳定优化版（保守策略）
 核心优化：
 1. 连接池配置优化（maxPoolSize=200, maxIdleTimeMS=15s, socketTimeout=60s）
-2. 双层并发控制（Flask层40并发 + 内部并行查询）
-3. 并行查询embedding和data（提速20-30%）
+2. Flask层并发控制（40并发限流，避免过载）
+3. 串行查询优化（稳定性优先，避免MongoDB过载）
 4. Rerank批次增大到50（减少60% HTTP请求）
-5. 连接健康检查（3秒心跳）
-6. 编码服务复用（已有）
-7. 连接池监控和统计
+5. 连接健康检查（3秒心跳，避免僵尸连接）
+6. 编码服务复用（节省重复调用）
+7. 连接池监控和统计（实时诊断）
 """
 
 import configparser
@@ -578,8 +578,8 @@ def recall_pipeline(**kwargs):
 
 def rank_pipeline(**kwargs):
     """
-    ⭐⭐⭐ 排序 pipeline - 核心优化：并行查询embedding和data ⭐⭐⭐
-    提速：20-30%
+    排序 pipeline - 串行查询（稳定版）
+    并行查询会导致MongoDB过载，改为串行
     """
     query: str = kwargs['query']
     result_dict: dict = kwargs['result_dict']
@@ -599,61 +599,54 @@ def rank_pipeline(**kwargs):
     find_condition = {'$or': search_conditions}
     search_start_time = time.time()
     
-    print(f'[Rank] Querying {len(search_conditions)} conditions...')
+    print(f'[Rank] Querying {len(search_conditions)} conditions (serial)...')
     
-    # ⭐⭐⭐ 核心优化：并行查询embedding和data（提速20-30%）⭐⭐⭐
+    # ⭐ 串行查询（稳定）：先查embedding，再查data
     embed_info = {}
-    data_list = []
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # 任务1：查询 embedding
-        @mongodb_retry(max_retries=3, initial_delay=1)
-        def query_embeddings():
-            try:
-                # 查询前检查连接
-                MONGO_PIPELINE_RANK.database.client.admin.command('ping', maxTimeMS=1000)
-            except:
-                print('[Rank] ⚠️ Embedding connection check failed, reconnecting...')
-                time.sleep(0.5)
-            
-            score_iter = MONGO_PIPELINE_RANK.find(
-                find_condition,
-                {'_id': 0, 'index': 1, 'doc_id': 1, 'embedding': 1}
-            ).max_time_ms(MONGO_MAX_TIME_MS)
-            
-            results = {}
-            for record in list(score_iter):
-                index = record.get('index')
-                doc_id = record.get('doc_id')
-                embedding = record.get('embedding')
-                if index is not None and doc_id is not None:
-                    combined_key = f"{index}_{doc_id}"
-                    results[combined_key] = embedding
-            return results
-        
-        # 任务2：查询 data
-        def query_data():
-            return list(MONGO_PIPELINE.find_data(find_condition))
-        
-        # ⭐ 并行执行两个查询
-        future_embed = executor.submit(query_embeddings)
-        future_data = executor.submit(query_data)
-        
-        # 等待结果
+    # 查询1：embedding（带重试）
+    @mongodb_retry(max_retries=3, initial_delay=1)
+    def query_embeddings():
+        # 查询前检查连接
         try:
-            embed_info = future_embed.result(timeout=120)  # 2分钟超时
-        except Exception as e:
-            print(f'[Rank] ❌ Embedding query failed: {e}')
-            embed_info = {}
+            MONGO_PIPELINE_RANK.database.client.admin.command('ping', maxTimeMS=1000)
+        except:
+            print('[Rank] ⚠️ Connection check failed, reconnecting...')
+            time.sleep(0.5)
         
-        try:
-            data_list = future_data.result(timeout=120)  # 2分钟超时
-        except Exception as e:
-            print(f'[Rank] ❌ Data query failed: {e}')
-            data_list = []
+        score_iter = MONGO_PIPELINE_RANK.find(
+            find_condition,
+            {'_id': 0, 'index': 1, 'doc_id': 1, 'embedding': 1}
+        ).max_time_ms(MONGO_MAX_TIME_MS)
+        
+        results = {}
+        for record in list(score_iter):
+            index = record.get('index')
+            doc_id = record.get('doc_id')
+            embedding = record.get('embedding')
+            if index is not None and doc_id is not None:
+                combined_key = f"{index}_{doc_id}"
+                results[combined_key] = embedding
+        return results
+    
+    try:
+        embed_info = query_embeddings()
+        print(f'[Rank] ✅ Embeddings: {len(embed_info)} records')
+    except Exception as e:
+        print(f'[Rank] ❌ Embedding query failed: {e}')
+        embed_info = {}
+    
+    # 查询2：data（串行执行）
+    data_list = []
+    try:
+        data_list = list(MONGO_PIPELINE.find_data(find_condition))
+        print(f'[Rank] ✅ Data: {len(data_list)} records')
+    except Exception as e:
+        print(f'[Rank] ❌ Data query failed: {e}')
+        data_list = []
     
     elapsed = time.time() - search_start_time
-    print(f'[Rank] ✅ Parallel query completed: embed={len(embed_info)}, data={len(data_list)}, time={elapsed:.2f}s')
+    print(f'[Rank] ✅ Serial query completed: embed={len(embed_info)}, data={len(data_list)}, time={elapsed:.2f}s')
     
     # 处理数据
     for dct in data_list:
@@ -945,10 +938,11 @@ def get_stats():
             'rerank_batch_size': RERANK_BATCH_SIZE,
         },
         'optimizations': [
-            'Parallel embedding+data query',
+            'Serial query (stability first)',
             'Rerank batch size 50',
             'Connection health check (3s)',
-            'Conservative concurrency control'
+            'Flask-layer concurrency control (40)',
+            'Encode service result reuse'
         ],
         'version': VERSION,
         'model': MODEL_NAME
@@ -1155,25 +1149,25 @@ print('='*80)
 print(f'  Model: {MODEL_NAME}')
 print(f'  Version: {VERSION}')
 print('')
-print('  MongoDB Connection Pool (Fusion Strategy):')
-print(f'    ├─ maxPoolSize: {MONGO_POOL_CONFIG["maxPoolSize"]} (保守配置：32×2×3≈200)')
+print('  MongoDB Connection Pool (Conservative Strategy):')
+print(f'    ├─ maxPoolSize: {MONGO_POOL_CONFIG["maxPoolSize"]} (保守配置：40并发×2余量≈80-100实际使用)')
 print(f'    ├─ minPoolSize: {MONGO_POOL_CONFIG["minPoolSize"]} (预热连接)')
 print(f'    ├─ maxIdleTimeMS: {MONGO_POOL_CONFIG["maxIdleTimeMS"]}ms (15s，激进清理)')
 print(f'    ├─ socketTimeoutMS: {MONGO_POOL_CONFIG["socketTimeoutMS"]}ms (60s，固定值)')
 print(f'    ├─ waitQueueTimeoutMS: {MONGO_POOL_CONFIG["waitQueueTimeoutMS"]}ms (快速失败)')
 print(f'    └─ heartbeatFrequencyMS: {MONGO_POOL_CONFIG["heartbeatFrequencyMS"]}ms (3s心跳)')
 print('')
-print('  Concurrency Control (Conservative):')
+print('  Concurrency Control:')
 print(f'    ├─ Flask层最大并发: {MAX_CONCURRENT_REQUESTS} requests')
-print(f'    └─ 内部并行查询: 2 workers (embedding + data)')
+print(f'    └─ MongoDB查询: 串行执行（避免过载）')
 print('')
 print('  Optimizations:')
-print('    ✅ 并行查询embedding和data（提速20-30%）')
+print('    ✅ 串行查询优化（稳定性优先）')
 print('    ✅ Rerank批次增大到50（减少60% HTTP请求）')
-print('    ✅ 连接健康检查（3秒心跳）')
+print('    ✅ 连接健康检查（3秒心跳，避免僵尸连接）')
 print('    ✅ 编码服务复用（节省重复调用）')
-print('    ✅ 双层并发控制（避免雪崩）')
-print('    ✅ 连接池监控统计')
+print('    ✅ Flask层并发控制（防止雪崩）')
+print('    ✅ 连接池监控统计（实时诊断）')
 print('='*80 + '\n')
 
 if __name__ == '__main__':
