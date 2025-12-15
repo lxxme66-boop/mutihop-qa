@@ -1,0 +1,245 @@
+# ==================== RAG 搜索服务配置文件 ====================
+# 版本：v2.0-improved
+# 更新时间：2025-12-15
+
+# ==================== 服务配置 ====================
+server:
+  host: "0.0.0.0"
+  port: 9510
+  debug: false
+  threaded: true
+
+# ==================== 连接池配置（第一层：状态一致性）====================
+connection_pools:
+  encoder:
+    max_connections: 48
+    high_water_mark: 0.8      # 80% 触发预防性清理
+    critical_mark: 0.9        # 90% 触发强制清理
+    max_lease_ms: 120000      # 120秒最大租约（匹配超时）
+    wait_timeout: 120         # 等待连接超时
+    
+  milvus:
+    max_connections: 64
+    high_water_mark: 0.8
+    critical_mark: 0.9
+    max_lease_ms: 120000
+    wait_timeout: 120
+    
+  reranker:
+    max_connections: 200       # 慢服务，更多连接
+    high_water_mark: 0.75      # 更敏感的水位线
+    critical_mark: 0.85
+    max_lease_ms: 160000       # 160秒最大租约
+    wait_timeout: 160
+    
+  mongodb:
+    max_connections: 100
+    high_water_mark: 0.75
+    critical_mark: 0.85
+    max_lease_ms: 180000       # 180秒最大租约
+    wait_timeout: 180
+
+# ==================== 熔断器配置（第二层：异步熔断）====================
+circuit_breakers:
+  encoder:
+    failure_threshold: 10      # 快服务：10次失败触发熔断
+    success_threshold: 3       # 3次成功恢复
+    timeout_seconds: 120       # 单次调用超时（匹配原版）
+    open_duration: 60          # 熔断持续60秒
+    half_open_max_calls: 3     # 半开状态最多3次尝试
+    
+  milvus:
+    failure_threshold: 10
+    success_threshold: 3
+    timeout_seconds: 120
+    open_duration: 60
+    half_open_max_calls: 3
+    
+  reranker:
+    failure_threshold: 5       # 慢服务：5次失败触发熔断
+    success_threshold: 3
+    timeout_seconds: 160
+    open_duration: 120         # 熔断持续120秒
+    half_open_max_calls: 2
+    
+  mongodb:
+    failure_threshold: 5
+    success_threshold: 3
+    timeout_seconds: 180
+    open_duration: 120
+    half_open_max_calls: 2
+
+# ==================== 并发控制（第二层：流量控制）====================
+concurrency_control:
+  initial_concurrency: 32      # 初始并发数
+  min_concurrency: 8           # 最小并发数
+  max_concurrency: 64          # 最大并发数（匹配原版）
+  adjust_interval: 10          # 每10秒调整一次
+  success_rate_threshold: 0.95 # 成功率阈值
+  increase_step: 8             # 增加步长
+  decrease_step: 8             # 减少步长
+
+# ==================== 批处理配置（第三层：批处理与调度）====================
+batch_processing:
+  enabled: false               # 是否启用批处理模式
+  batch_size: 512              # 每批512个请求
+  min_batch_size: 128          # 最小批次大小
+  max_batch_size: 1024         # 最大批次大小
+  batch_interval: 3            # 批间等待3秒
+  batch_concurrency: 32        # 批内并发数（匹配原版）
+  batch_timeout: 300           # 批次超时5分钟
+
+# ==================== 监控告警（第四层：全景监控）====================
+monitoring:
+  enabled: true
+  check_interval: 5            # 每5秒检查一次
+  
+  alerts:
+    connection_pool_high:
+      threshold: 0.85
+      severity: "WARNING"
+      action: "触发预防性清理"
+      
+    connection_pool_critical:
+      threshold: 0.90
+      severity: "CRITICAL"
+      action: "触发强制清理"
+      
+    connection_leak:
+      threshold: 1             # 检测到1个泄漏即告警
+      severity: "ERROR"
+      action: "自动清理泄漏连接"
+      
+    circuit_breaker_open:
+      severity: "CRITICAL"
+      action: "服务降级"
+      
+    batch_failure_rate:
+      threshold: 0.2           # 失败率超过20%
+      severity: "WARNING"
+      action: "降低批次大小"
+
+# ==================== 外部服务端点配置 ====================
+services:
+  # 编码服务
+  encoder:
+    url: "http://8.130.183.20:8031/encode"
+    connect_timeout: 240       # ⭐ 连接超时 240秒（匹配原版）
+    read_timeout: 480          # ⭐ 读取超时 480秒（匹配原版）
+    max_retries: 5
+    retry_delay: 10
+    
+  # Milvus 向量检索
+  milvus:
+    url: "http://8.130.183.20:8033/api-vec-search/search"
+    connect_timeout: 360       # ⭐ 连接超时 360秒（匹配原版）
+    read_timeout: 720          # ⭐ 读取超时 720秒（匹配原版）
+    max_retries: 3
+    retry_delay: 3
+    
+  # BGE Reranker
+  reranker:
+    url: "http://8.130.183.20:8032/query_bge_reranker/"
+    connect_timeout: 360       # ⭐ 连接超时 360秒（匹配原版）
+    read_timeout: 720          # ⭐ 读取超时 720秒（匹配原版）
+    max_retries: 3
+    retry_delay: 3
+    
+  # MongoDB
+  mongodb:
+    url: "mongodb://root:example@10.70.223.31:27017"
+    database: "rqa"
+    collection: "paper_shards_detail_table_20230908"
+    max_pool_size: 800         # ⭐ 匹配原版
+    min_pool_size: 20
+    connect_timeout_ms: 90000  # 90秒
+    socket_timeout_ms: 120000  # 120秒
+    server_selection_timeout_ms: 30000  # 30秒
+    max_idle_time_ms: 30000
+    wait_queue_timeout_ms: 60000
+    retry_reads: true
+    retry_writes: true
+    heartbeat_frequency_ms: 5000
+    
+  # Elasticsearch（原版保留）
+  elasticsearch:
+    url: "http://10.70.222.234:9200"
+    timeout: 30
+    max_retries: 3
+    retry_on_timeout: true
+
+# ==================== HTTP Session 配置 ====================
+http_session:
+  pool_connections: 80         # ⭐ 匹配原版
+  pool_maxsize: 120            # ⭐ 匹配原版
+  pool_block: true             # 阻塞模式，等待连接
+  max_retries: 0               # 重试由装饰器控制
+
+# ==================== 编码缓存配置 ====================
+cache:
+  encoder:
+    enabled: true
+    max_size: 2000             # ⭐ 最大缓存 2000 条
+    ttl: 3600                  # 1小时过期
+    cleanup_size: 200          # 满时清理 200 条
+
+# ==================== MongoDB 批量查询配置 ====================
+mongodb_query:
+  parallel_workers: 4          # ⭐ 并行查询线程数（匹配原版）
+  batch_timeout: 150           # ⭐ 单批超时 150秒（匹配原版）
+  max_time_ms: 120000          # ⭐ MongoDB 服务端超时 120秒
+  split_threshold: 150         # 超过此数量自动拆分
+  heartbeat_interval: 10       # 心跳日志间隔（秒）
+  client_timeout: 180          # 客户端总超时
+
+# ==================== 搜索业务配置 ====================
+search:
+  # 召回配置
+  retrieve_chunk_num: 2000     # 向量召回数量
+  es_retrieve_chunk_num: 400   # ES 召回数量
+  
+  # 排序配置
+  doc_score_chunk_num: 8
+  score_threshold: -2
+  
+  # 拼接配置
+  token_limit: 4000
+  token_encode_model: "gpt-3.5-turbo"
+  concat_chunk_num: 4
+
+# ==================== 模型配置 ====================
+models:
+  # 主编码模型
+  encoder_model: "/mnt/hdd1/haoyangliu/em_model/bge-multilingual-gemma2"
+  
+  # 查询分类模型
+  query_classifier:
+    model_path: "/home/tcl/rqa_dir/query_class_model/bert-base-chinese"
+    checkpoint_path: "/home/tcl/rqa_dir/query_class_model/query_classifier1.pth"
+    threshold: 0.4
+    
+  # 关键词提取模型
+  keyword_extractor:
+    zh_model: "/mnt/hdd1/haoyangliu/em_model/kw/paraphrase-multilingual-MiniLM-L12-v2"
+    en_model: "/mnt/hdd1/haoyangliu/em_model/kw/paraphrase-multilingual-MiniLM-L12-v2"
+    
+  # 用户词典
+  user_dict: "config/ext_dict2.dct"
+  
+  # 记忆关键词
+  memory_keywords: "config/memory_keywords_recall_v20230916.txt"
+
+# ==================== 日志配置 ====================
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(levelname)s] %(message)s"
+  file: "logs/search_service.log"
+  max_bytes: 104857600  # 100MB
+  backup_count: 10
+
+# ==================== 其他配置 ====================
+misc:
+  version: "2023091110"
+  warmup_on_startup: true      # 启动时预热服务
+  enable_stats_endpoint: true  # 启用统计接口
+  stats_update_interval: 5     # 统计更新间隔（秒）
